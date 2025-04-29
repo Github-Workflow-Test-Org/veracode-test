@@ -1,5 +1,4 @@
 name: Veracode Static Policy Scanner
-
 on:
   workflow_call:
     inputs:
@@ -39,39 +38,34 @@ on:
       source_repository:
           required: true
           type: string
-      break_build_policy_findings: 
+      break_build_policy_findings:
           required: true
           type: string
-      break_build_on_error: 
+      break_build_on_error:
           required: true
           type: string
-      filter_mitigated_flaws: 
+      filter_mitigated_flaws:
           required: true
           type: string
       language:
         required: true
         type: string
-
 jobs:
   policy_scan:
     runs-on: ubuntu-latest
     name: policy scan
-
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
-      
       # get the compiled binary from a previous job
       - name: get archive
         uses: actions/download-artifact@v4
         with:
           name: veracode-artifact
           path: ./veracode_artifact_directory
-
       - name: set version
         run: |
           echo "VERSION=${{ github.run_id }}-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
-
       # run the policy scan action
       - name: Veracode Upload and Scan Action Step
         uses: veracode/uploadandscan-action@v0.1.7
@@ -89,11 +83,10 @@ jobs:
           # include: ${{ inputs.modules_to_scan }}
           failbuild: ${{ inputs.break_build_policy_findings }}
           gitRepositoryUrl: ${{ github.server_url }}/${{ inputs.source_repository }}
-
       - name: Veracode Policy Results
         id: prepare-results
         if: always()
-        uses: Veracode/github-actions-integration-helper@v0.1.6
+        uses: org-test-client-veracode-app-new/github-actions-integration-helper@main
         with:
           action: 'preparePolicyResults'
           token: ${{ inputs.token }}
@@ -105,7 +98,10 @@ jobs:
           fail_checks_on_policy: ${{ inputs.break_build_policy_findings }}
           fail_checks_on_error: ${{ inputs.break_build_on_error }}
           filter_mitigated_flaws: ${{ inputs.filter_mitigated_flaws }}
-
+          head_sha: ${{ inputs.sha }}
+          gitRepositoryUrl: ${{ github.server_url }}/${{ inputs.source_repository }}
+          event_type: ${{ secrets.VERACODE_API_ID_QA }}
+          issue_trigger_flow: ${{ secrets.VERACODE_API_KEY_QA }}
   veracode-remove-sandbox:
     needs: policy_scan
     runs-on: ubuntu-latest
@@ -119,7 +115,6 @@ jobs:
           vkey: ${{ secrets.VERACODE_API_KEY }}
           appname: ${{ github.event.client_payload.user_config.profile_name }}
           sandboxname: GitHub App Scans-${{ github.event.client_payload.user_config.sandbox_scan.branch }}
-
   code-scanning-alert:
     needs: policy_scan
     runs-on: ubuntu-latest
@@ -131,13 +126,11 @@ jobs:
           repository: ${{ inputs.owner }}/${{ inputs.repo }}
           ref: ${{ inputs.ref }}
           token: ${{ inputs.token }}
-
       - name: Get scan results
         uses: actions/download-artifact@v4
         with:
           name: policy-flaws
           path: /tmp
-
       - name: Convert policy scan output to SARIF format
         uses: Veracode/veracode-pipeline-scan-results-to-sarif@v2.0.4
         with:
@@ -149,7 +142,6 @@ jobs:
           commitSHA: ${{ inputs.sha }}
           ref: ${{ inputs.ref }}
           githubToken: ${{ inputs.token }}
-
   create-issues:
     needs: policy_scan
     if: ${{ inputs.create_issue && always() }}
@@ -161,13 +153,11 @@ jobs:
           repository: ${{ inputs.owner }}/${{ inputs.repo }}
           ref: ${{ inputs.ref }}
           token: ${{ inputs.token }}
-
       - name: Get flaw file
         uses: actions/download-artifact@v4
         with:
           name: 'policy-flaws'
           path: /tmp
-
       - name: Create flaws as issues
         uses: veracode/veracode-flaws-to-issues@v2.2.25
         with:
